@@ -160,11 +160,6 @@ adonis2(samplewise_bc ~ sample_data(physeq_rarefy)$season, permutations = 1000)
 adonis2(samplewise_bc ~ (sample_data(physeq_rarefy)$species*sample_data(physeq_rarefy)$season), permutations = 1000)
 ```
 
-```{r}
-ord_bc<-ordinate(physeq_rarefy, method="NMDS", "bray") 
-plot_ordination(physeq_rarefy, ord_bc, type="samples", color="species")
-plot_ordination(physeq_rarefy, ord_bc, type="samples", color="season")
-```
 
 ```{r}
 plot_ordination(physeq_rarefy, ord_bc, type="samples", color="species") + 
