@@ -10,3 +10,210 @@ output:
   word_document: 
     toc: yes
 ---
+```{r}
+library(here)
+library(tidyverse)
+library(permute)
+library(lattice)
+library(phyloseq)
+library(vegan)
+library(vegetarian)
+library(ggplot2)
+library(FSA)
+```
+
+```{r}
+physeq <- readRDS(here("data", "banff_diet_phyloseq.rds"))
+physeq
+```
+
+```{r}
+sample_names(physeq)[1:5] #displays first 5 sample names
+sample_variables(physeq) # shows the colummn headers of the sample_data 
+otu_table(physeq)[1:5, 1:5] # shows first 5 rows and 5 columns of otu table
+tax_table(physeq)[1:5, 1:5] # shows first 5 rows and 5 columns of taxonomy table
+```
+
+```{r}
+min(sample_sums(physeq)) #shows lowest number of reads for the samples
+physeq_1000 <- prune_samples(sample_sums(physeq)>=1000, physeq) #pruning samples with reads below 1000
+min(sample_sums(physeq_1000)) #check the pruning was successful  
+nsamples(physeq_1000) #check number of samples again
+otu_table(physeq_1000)
+```
+
+```{r}
+physeq_animal <- subset_samples(physeq_1000, sample_type %in% "animal")
+physeq_animal
+```
+
+```{r}
+hist(sample_sums(physeq_animal), main="Histogram of read depths across samples", xlab="sequencing depth", ylab="number of samples")
+```
+
+```{r}
+set.seed(7861)
+physeq_rarefy<-rarefy_even_depth(physeq_animal, rngseed=T, replace=F)
+```
+
+```{r}
+saveRDS(physeq_rarefy, here("data", "physeq_rarefy1.rds"))
+
+```
+
+```{r}
+physeq_rarefy <- readRDS(here("data", "physeq_rarefy.rds"))
+
+physeq_rarefy
+```
+
+```{r}
+richness_physeq_rarefy<-apply(otu_table(physeq_rarefy), 2, function(x) d(x, q=0))
+richness_physeq_rarefy
+
+
+```
+
+```{r}
+richness_df<-data.frame(richness=richness_physeq_rarefy,species=sample_data(physeq_rarefy)$species, season=sample_data(physeq_rarefy)$season)
+richness_df
+
+
+write.csv(richness_df, here("data", "richness_df.csv"))
+```
+
+```{r}
+mean_richness_species<-tapply(richness_df$richness, richness_df$species, mean)
+mean_richness_species
+
+mean_richness_season<-tapply(richness_df$richness, richness_df$season, mean)
+mean_richness_season
+
+mean_richness_bison<-tapply(filter(richness_df, species == "Bison")$richness, filter(richness_df, species == "Bison")$season, mean)
+mean_richness_bison
+
+mean_richness_elk<-tapply(filter(richness_df, species == "Elk")$richness, filter(richness_df, species == "Elk")$season, mean)
+mean_richness_elk
+
+mean_richness_bighorn<-tapply(filter(richness_df, species == "BighornSheep")$richness, filter(richness_df, species == "BighornSheep")$season, mean)
+mean_richness_bighorn
+
+```
+
+Boxplot for Richness:
+```{r}
+ggplot(data=richness_df, aes(x=species, y=richness))+ #fill=season, color=season, type=season)#)+
+  scale_x_discrete(labels = c("Bighorn Sheep", "Bison", "Elk"))+
+geom_boxplot(color="black")+
+theme_classic()+
+xlab("Ungulates")+
+ylab("Dietary Richness")
+```
+
+```{r}
+ggplot(data=richness_df, aes(x=season, y=richness))+ 
+geom_boxplot(color="black")+
+theme_classic()+
+xlab("Ungulates")+
+ylab("Dietary Richness")
+```
+
+```{r}
+model1<-aov(richness~species * season,data=richness_df)
+summary(model1)
+
+##Tukey, pairwise differences
+TukeyHSD(model1)
+```
+
+```{r}
+qqnorm(richness_df$richness)
+qqline(richness_df$richness, col="red")
+```
+
+```{r}
+#Shapiro Test
+shapiro.test(richness_df$richness)
+```
+
+
+*****
+Beta Diversity:
+
+Bray-Curtis Dissimilarity:
+```{r}
+samplewise_bc<-vegdist(t(otu_table(physeq_rarefy)), "bray")
+samplewise_bc
+```
+
+```{r}
+meandist(samplewise_bc, sample_data(physeq_rarefy)$species)
+```
+
+```{r}
+#PERMANOVA testing of groups
+#Single factor approach with species
+adonis2(samplewise_bc ~ sample_data(physeq_rarefy)$species, permutations = 1000)
+#Single factor approach with season
+adonis2(samplewise_bc ~ sample_data(physeq_rarefy)$season, permutations = 1000)
+#Two factor approach with species and season
+adonis2(samplewise_bc ~ (sample_data(physeq_rarefy)$species*sample_data(physeq_rarefy)$season), permutations = 1000)
+```
+
+```{r}
+ord_bc<-ordinate(physeq_rarefy, method="NMDS", "bray") 
+plot_ordination(physeq_rarefy, ord_bc, type="samples", color="species")
+plot_ordination(physeq_rarefy, ord_bc, type="samples", color="season")
+```
+
+```{r}
+plot_ordination(physeq_rarefy, ord_bc, type="samples", color="species") + 
+  stat_ellipse() + 
+  geom_point(size=1) +
+  theme_classic()
+
+plot_ordination(physeq_rarefy, ord_bc, type="samples", color="season") + 
+  stat_ellipse() + 
+  geom_point(size=1) +
+  theme_classic()
+```
+
+```{r}
+sample_data(physeq_rarefy)['sampleID'] <- row.names(sample_data(physeq_rarefy))
+
+plot_ordination(physeq_rarefy, ord_bc, type="samples", color="species", shape="season") +
+  scale_shape_manual(values = c(15, 17)) +
+  #stat_ellipse() +
+  geom_point(size=1) +
+  theme_classic() +
+  scale_color_manual(values = c("#40B0A6", "#E1BE6A", "#D45B89")) +
+  #geom_text(mapping = aes(label = sampleID), size = 3, vjust = 1.5) + #add text variable to plot
+  geom_point(size = 3)
+  
+```
+
+***********
+Composition Data
+
+```{r}
+rank_names(physeq_rarefy)
+physeq_rarefy
+```
+
+```{r}
+physeq_taxtable <- tax_glom(physeq_rarefy, taxrank=rank_names(physeq_rarefy)[1])
+tax_table(physeq_taxtable)
+sort(taxa_sums(physeq_taxtable)) #Sorts from least to most instances of a taxa
+rank_names(physeq_rarefy) #Use to find which column you need (most likely "family_name")
+physeq_rarefy_pruned <- prune_taxa(tax_table(physeq_rarefy)[,1]%in%c("Hydrophyllaceae", "Equisetaceae", "Saxifragaceae", "Elaeagnaceae", "Ophioglossaceae", "Plantaginaceae", "Cyperaceae", "Caryophyllaceae", "Crassulaceae", "Asteraceae", "Pinaceae", "Fabaceae", "Ericaceae", "Onagraceae", "Polygonaceae", "Salicaceae", "Poaceae", "Rosaceae"), physeq_rarefy)
+```
+
+```{r}
+ggplot(data = psmelt(physeq_rarefy_pruned), mapping = aes_string(x = "season",y = "Abundance")) + geom_bar(aes(color=family_name, fill=family_name), stat="identity", position = "fill")+
+#scale_x_discrete(labels = c("Bighorn\nSheep", "Bison", "Elk")) +
+scale_x_discrete(labels = c("Spring", "Summer")) +
+theme_classic()+
+xlab("Season")+
+ylab("Abundance") +
+facet_grid(~species, scales= "free")
+```
