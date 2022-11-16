@@ -62,7 +62,7 @@ saveRDS(physeq_rarefy, here("data", "physeq_rarefy1.rds"))
 ```
 
 ```{r}
-physeq_rarefy <- readRDS(here("data", "physeq_rarefy.rds"))
+physeq_rarefy <- readRDS(here("data", "physeq_rarefy1.rds"))
 
 physeq_rarefy
 ```
